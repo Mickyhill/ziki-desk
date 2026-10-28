@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zedu Release Freeze Report</title>
+<meta name="description" content="Why fixes merged since Oct 9 are not live on zedu.chat, with evidence, owners and actions taken. HNG 15, michael Churchill.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070d1f;--panel:#0c1630;--line:#1f2d52;--text:#e8eeff;--muted:#8b9bc4;--blue:#5a8cff;--green:#34d399;--red:#f87171;--amber:#f5b942}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:860px;margin:0 auto;padding:36px 20px 60px}
+.k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);font-weight:700}
+h1{font-size:30px;letter-spacing:-.02em;margin:8px 0 10px;line-height:1.25}
+h2{font-size:19px;margin:34px 0 10px}
+p,li{color:#c9d4f2}
+.lead{font-size:17px;color:var(--text)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin:14px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;color:var(--blue);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.ok{color:var(--green);font-weight:700}.no{color:var(--red);font-weight:700}.wait{color:var(--amber);font-weight:700}
+code{background:#13214a;border-radius:6px;padding:1px 6px;font-size:13px}
+a{color:var(--blue)}
+.scroll{overflow-x:auto}
+footer{color:#5f6f99;font-size:13px;margin-top:40px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="k">HNG 15 · Major production fix + marketing fix · michael Churchill · Team Vulcan</div>
+  <h1>Unblocking Zedu releases: the 17-day production freeze</h1>
+  <p class="lead">On 26 Oct I found that zedu.chat had not pulled from central-staging since <b>9 Oct</b>, with <b>104 commits</b> ready and not live, including my marketing fix (pricing plan names). I traced it with git, found the release owners and raised it. <b>At 16:42 the same day, central-staging was merged into production (#1062). 0 commits are now waiting, and the pricing fix is live on zedu.chat.</b> Our team's #46 is still pending, because it has not been sent from the Vulcan repo to central.</p>
+
+  <h2>1. The marketing fix: pricing plan names</h2>
+  <div class="box">
+    <p><b>Problem on zedu.chat/pricing (checked 26 Oct):</b> the plans are called Starter, Pro and Enterprise, but the Pro card says "Everything in <b>Zedu Free</b>", Enterprise says "Everything in <b>Zedu Educator</b>", and the comparison table calls Pro "<b>Growth</b>". Six names for three plans confuses people at the moment they decide to pay.</p>
+    <p><b>Tickets:</b> Ziki <a href="https://ziki.dev/issues/554">#554</a> (open, confirmed) and #413 (marked resolved, but its linked fix <a href="https://github.com/zedu-hng/zedu-fe/pull/785">zedu-hng/zedu-fe #785</a> was never merged: it comes from a fork not registered in team routing, open since 9 Oct).</p>
+    <p><b>Finding:</b> the corrected text ("Everything in Starter / Pro") is already in central <code>dev</code> and <code>central-staging</code>. Nobody needs to write it again. It only needs to be released.</p>
+  </div>
+
+  <div class="box scroll">
+    <table>
+      <tr><th colspan="2">Marketing fix one-pager</th></tr>
+      <tr><td><b>Page</b></td><td><a href="https://zedu.chat/pricing">zedu.chat/pricing</a></td></tr>
+      <tr><td><b>Change</b></td><td>Use the three real plan names everywhere on the pricing page.</td></tr>
+      <tr><td><b>Before</b></td><td>Pro card: "Everything in Zedu Free". Enterprise card: "Everything in Zedu Educator". Comparison table: "Growth".</td></tr>
+      <tr><td><b>After (live)</b></td><td>Pro card: "Everything in Starter". Enterprise card: "Everything in Pro".</td></tr>
+      <tr><td><b>Why</b></td><td>A buyer comparing plans sees names that don't exist and can't tell what they are paying for, right at the moment they decide.</td></tr>
+      <tr><td><b>Risk</b></td><td>Low. Text only, no logic. Rollback is one revert.</td></tr>
+      <tr><td><b>Approval</b></td><td>The copy was already reviewed into central <code>dev</code> and <code>central-staging</code>. I asked Mark on 26 Oct to approve it going live. It shipped in production release #1062.</td></tr>
+    </table>
+  </div>
+
+  <h2>2. Where each fix was stuck (evidence from git, 26 Oct, before the release)</h2>
+  <div class="box scroll">
+    <table>
+      <tr><th>Stage</th><th>Repo / branch</th><th>Pricing names fix</th><th>#46 SoftwareApplication JSON-LD</th></tr>
+      <tr><td>1. Team</td><td>zedu-vulcan/zedu-fe <code>dev</code></td><td class="ok">Fixed</td><td class="ok">In (PR #58)</td></tr>
+      <tr><td>2. Central</td><td>zedu-hng/zedu-fe <code>dev</code></td><td class="ok">Fixed</td><td class="no">Not sent yet</td></tr>
+      <tr><td>3. Central staging</td><td>zedu-hng/zedu-fe <code>central-staging</code></td><td class="ok">Fixed (last promoted 16 Oct, #1235)</td><td class="no">No</td></tr>
+      <tr><td>4. Production staging</td><td>zeduchat/zedu-fe <code>staging</code></td><td class="no">Old text</td><td class="no">No</td></tr>
+      <tr><td>5. Live</td><td>zeduchat/zedu-fe <code>main</code> (last merge 9 Oct, #337)</td><td class="no">Old text</td><td class="no">No</td></tr>
+    </table>
+  </div>
+  <p>How I checked: <code>git grep</code> for "Everything in Zedu Free" / "Everything in Starter" in <code>src/app/(homepage)/_lib/pricingData.ts</code> on each branch, <code>git rev-list --count prod/main..upstream/central-staging</code> = 104, and <code>git log --merges</code> on production <code>main</code>.</p>
+
+  <h2>3. Who owns the release step</h2>
+  <div class="box">
+    <ul>
+      <li><b>Ayodeji Oladimeji</b> merged the last central-staging → production PRs (#333, #337 on 9 Oct) and is active on production <code>staging</code> (merges on 25 Oct).</li>
+      <li><b>Jeffery Orazulike</b> and <b>zxenonx</b> ran the central-staging syncs (#708, #709, 8 Oct).</li>
+      <li><b>Dev B (Team Vulcan lead)</b> sends Vulcan work to central. #46 needs this step.</li>
+      <li><b>Mark</b> approves marketing changes.</li>
+    </ul>
+  </div>
+
+  <h2>4. What I did</h2>
+  <div class="box">
+    <table>
+      <tr><th>When</th><th>Action</th></tr>
+      <tr><td>26 Oct</td><td>Confirmed the pricing bug is still live, searched Ziki for existing tickets (found #413, #554), and posted the evidence on #554.</td></tr>
+      <tr><td>26 Oct</td><td>Traced both fixes branch by branch and measured the gap (104 commits since 9 Oct).</td></tr>
+      <tr><td>26 Oct</td><td>Asked Dev B to include Vulcan PR #58 (#46) in the next central PR.</td></tr>
+      <tr><td>26 Oct</td><td>Messaged Jeffery Orazulike on Zedu with the evidence and one ask: is a central-staging → production sync planned, and can I help prepare it?</td></tr>
+      <tr><td>26 Oct</td><td>Posted a plain-language release status in the Team Vulcan group, and asked Mark to approve the pricing change going live.</td></tr>
+      <tr><td>26 Oct, 16:42</td><td><b>Ayodeji Oladimeji merged central-staging into production (zeduchat/zedu-fe #1062)</b>, about 3 hours after I raised the freeze. More merges followed until 23:02 (#1066).</td></tr>
+      <tr><td>27 Oct</td><td>Verified: <code>git rev-list --count prod/main..upstream/central-staging</code> = 0. zedu.chat/pricing now shows "Everything in Starter" and "Everything in Pro". Followed up with Jeffery.</td></tr>
+    </table>
+  </div>
+
+  <h2>5. Status and next step</h2>
+  <div class="box">
+    <p><span class="ok">Marketing fix: live.</span> The pricing plan names are fixed on zedu.chat/pricing (checked 27 Oct). Next: close #554 and #413 on Ziki with the proof.</p>
+    <p><span class="wait">#46: waiting on central.</span> zedu.chat/download still has no SoftwareApplication data (checked 27 Oct). Dev B needs to send Vulcan PR #58 to central so it ships in the next release.</p>
+  </div>
+
+  <footer>Report by michael Churchill (HNG 15, Team Vulcan) · data checked 26–27 Oct 2026 · see also <a href="/">Ziki Desk</a></footer>
+</div>
+</body>
+</html>

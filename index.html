@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ziki: situation, not thread</title>
+<meta name="description" content="A human-agent interaction redesign for Ziki. The human is the manager: Ziki turns agent activity into a short queue of decisions.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070d1f; --panel:#0c1630; --panel2:#101c3a; --line:#1f2d52; --line2:#2a3a66;
+  --text:#e8eeff; --muted:#8b9bc4; --dim:#5f6f99;
+  --blue:#2f6bff; --blue2:#5a8cff; --green:#34d399; --amber:#f5b942; --red:#f87171; --violet:#a78bfa;
+  --r:18px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;font-size:15px;line-height:1.5}
+a{color:var(--blue2);text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+
+/* top bar (mirrors current Ziki) */
+.top{position:sticky;top:0;z-index:20;background:rgba(7,13,31,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:18px;height:62px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:19px}
+.logo svg{width:24px;height:24px}
+.ws{color:var(--text);font-weight:600;border-left:1px solid var(--line2);padding-left:14px}
+.nav{display:flex;gap:6px;margin-left:8px}
+.nav span{color:var(--muted);font-weight:500;padding:6px 12px;border-radius:999px;font-size:14px}
+.nav span.on{background:#14244a;color:var(--blue2)}
+.spacer{flex:1}
+.chip{border:1px solid var(--line2);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;white-space:nowrap}
+.pts{background:#2b2410;border-color:#4a3b12;color:#f5c542}
+.avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#c8102e,#7a0b1c);display:inline-grid;place-items:center;font-size:11px;font-weight:700}
+.bell{position:relative;color:var(--muted)}
+.bell b{position:absolute;top:-6px;right:-8px;background:var(--blue);color:#fff;font-size:10px;border-radius:999px;padding:1px 5px}
+
+/* mode switch */
+.modebar{border-bottom:1px solid var(--line);background:#0a1228}
+.modebar .wrap{display:flex;align-items:center;gap:14px;padding-top:12px;padding-bottom:12px;flex-wrap:wrap}
+.switch{display:flex;background:var(--panel);border:1px solid var(--line2);border-radius:999px;padding:4px}
+.switch button{border:0;background:transparent;color:var(--muted);font-weight:600;font-size:14px;padding:8px 16px;border-radius:999px}
+.switch button.on{background:var(--blue);color:#fff}
+.modebar p{margin:0;color:var(--muted);font-size:13px}
+.modebar .why{margin-left:auto}
+
+/* shared panels */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px}
+h1{font-size:30px;margin:28px 0 4px;letter-spacing:-.02em}
+h2{font-size:18px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pill{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 10px}
+.p-open{background:#10224a;color:#7fb0ff}.p-med{background:#3a2c08;color:#f5c542;border:1px solid #6a5212}.p-ready{background:#0c3324;color:#4ade80}
+.p-idle{color:var(--green);font-weight:600}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--blue2);text-align:left;padding:12px 14px;background:#122045}
+td{padding:14px;border-top:1px solid var(--line);font-size:14px}
+.hidden{display:none!important}
+
+/* BEFORE annotations */
+.note{position:relative}
+.tag{position:absolute;z-index:3;background:var(--amber);color:#1b1300;font-size:12px;font-weight:700;border-radius:8px;padding:4px 9px;box-shadow:0 6px 18px rgba(0,0,0,.4);max-width:240px;line-height:1.35}
+.tag::before{content:attr(data-n);display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#1b1300;color:var(--amber);font-size:11px;margin-right:6px}
+.annot-off .tag{display:none}
+.bars{display:flex;gap:18px;align-items:flex-end;height:180px;padding-top:20px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.bar i{display:block;width:100%;max-width:46px;height:140px;border-radius:999px;background:#152448;position:relative;overflow:hidden}
+.bar i u{position:absolute;bottom:0;left:0;right:0;background:var(--blue);border-radius:999px}
+.thread .c{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-top:12px;background:#0a1430}
+.thread .c h4{margin:0 0 6px;font-size:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.thread .c h4 small{color:var(--dim);font-weight:500;margin-left:auto}
+.thread .c p{margin:0;color:#c9d4f2;font-size:14px}
+.agentbadge{font-size:11px;background:#1a2850;border-radius:999px;padding:1px 8px;color:var(--muted);font-weight:500}
+
+/* AFTER: desk */
+.desk-head{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;margin:26px 0 18px}
+.desk-head h1{margin:0}
+.state{display:flex;gap:10px;flex-wrap:wrap}
+.state .chip{background:var(--panel)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.queue-title{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+.queue-title h2{margin:0;white-space:nowrap}
+.count{background:var(--blue);color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:1px 9px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;margin-bottom:14px;transition:opacity .35s, transform .35s, max-height .45s, margin .45s, padding .45s;overflow:hidden;max-height:1400px}
+.card.gone{opacity:0;transform:translateX(30px);max-height:0;margin:0;padding-top:0;padding-bottom:0;border-width:0}
+.kind{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.k-block{color:var(--amber)}.k-conf{color:var(--violet)}.k-sugg{color:var(--blue2)}.k-agent{color:var(--green)}
+.card h3{margin:0 0 6px;font-size:18px;letter-spacing:-.01em}
+.card .lead{margin:0 0 14px;color:#c9d4f2}
+.meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-bottom:14px}
+.meta b{color:var(--text);font-weight:600}
+.wait{color:var(--amber)!important}
+.facts{display:grid;gap:8px;margin:0 0 16px;padding:0;list-style:none}
+.facts li{display:flex;gap:10px;font-size:14px;color:#c9d4f2;background:#0a1430;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.facts li .who{color:var(--muted);font-size:12.5px;margin-left:auto;white-space:nowrap}
+.ico{flex:none;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:12px;font-weight:800}
+.i-ok{background:#0c3324;color:var(--green)}.i-x{background:#3a1414;color:var(--red)}.i-w{background:#3a2c08;color:var(--amber)}.i-i{background:#14244a;color:var(--blue2)}
+.rec{display:flex;gap:10px;background:#0f1f45;border:1px solid #23397a;border-radius:12px;padding:12px 14px;margin:0 0 16px;font-size:14px}
+.rec b{color:var(--blue2)}
+.acts{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line2);background:#122045;color:var(--text);font-weight:600;font-size:14px;padding:9px 16px;border-radius:999px}
+.btn:hover{border-color:var(--blue2)}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.ghost{background:transparent;color:var(--muted)}
+.more{margin-left:auto;font-size:13px;color:var(--muted);background:none;border:0;padding:6px}
+.more:hover{color:var(--text)}
+.path{display:flex;align-items:center;gap:0;margin:4px 0 16px;overflow-x:auto;padding-bottom:4px}
+.step{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:84px;font-size:12px;color:var(--dim);position:relative}
+.step i{width:26px;height:26px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:700;background:var(--panel)}
+.step.done{color:var(--muted)}.step.done i{border-color:var(--green);background:#0c3324;color:var(--green)}
+.step.stuck{color:var(--amber);font-weight:700}.step.stuck i{border-color:var(--amber);background:#3a2c08;color:var(--amber);animation:pulse 1.8s infinite}
+.link{flex:1;min-width:20px;height:2px;background:var(--line2);margin-bottom:22px}
+.link.done{background:var(--green)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,185,66,.5)}50%{box-shadow:0 0 0 7px rgba(245,185,66,0)}}
+.why-box{display:none;margin-top:12px;font-size:13px;color:var(--muted);background:#0a1430;border:1px dashed var(--line2);border-radius:12px;padding:10px 12px}
+.why-box.show{display:block}
+.side .panel{margin-bottom:16px}
+.side h2{font-size:15px}
+.pulse-row{display:flex;justify-content:space-between;font-size:13.5px;padding:7px 0;border-top:1px solid var(--line)}
+.pulse-row:first-of-type{border-top:0}
+.pulse-row span:last-child{color:var(--text);font-weight:600}
+.progress{height:8px;background:#152448;border-radius:999px;overflow:hidden;margin:10px 0 6px}
+.progress u{display:block;height:100%;background:var(--green);border-radius:999px}
+.agentline{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}
+.agentline:first-of-type{border-top:0}
+.agentline .s{margin-left:auto;font-size:12px;color:var(--muted)}
+details.handled summary{cursor:pointer;color:var(--muted);font-size:14px;list-style:none}
+details.handled summary::-webkit-details-marker{display:none}
+details.handled ul{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:13.5px}
+.done-list{font-size:13.5px;color:var(--muted)}
+.done-list div{padding:6px 0;border-top:1px solid var(--line);display:flex;gap:8px}
+.done-list div:first-child{border-top:0}
+.empty-good{text-align:center;padding:30px 20px}
+.empty-good h3{margin:8px 0 4px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(30px);background:#13234a;border:1px solid var(--line2);color:var(--text);padding:12px 18px;border-radius:12px;font-size:14px;opacity:0;transition:.3s;z-index:50;max-width:92vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.modal-bg{position:fixed;inset:0;background:rgba(3,6,16,.7);display:none;align-items:center;justify-content:center;z-index:60;padding:16px}
+.modal-bg.show{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);padding:22px;max-width:520px;width:100%}
+.modal textarea{width:100%;min-height:110px;background:#0a1430;color:var(--text);border:1px solid var(--line2);border-radius:12px;padding:12px;font-family:inherit;font-size:14px;margin:10px 0 14px}
+
+.intro{background:linear-gradient(180deg,#0f1d40,#0a1228);border-bottom:1px solid var(--line)}
+.intro-box{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:center;padding:22px 0}
+.intro-k{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--blue2);font-weight:700;margin-bottom:6px}
+.intro h2{font-size:22px;margin:0 0 8px;letter-spacing:-.01em}
+.intro p{margin:0;color:#c9d4f2;font-size:14.5px}
+.intro-steps{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.intro-steps button{width:100%;text-align:left;display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:10px 14px;color:var(--text);font:600 14.5px Inter}
+.intro-steps button:hover{border-color:var(--blue2)}
+.intro-steps b{width:26px;height:26px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-size:13px;flex:none}
+.intro-steps span{margin-left:auto;color:var(--muted);font-weight:500;font-size:12.5px}
+@media (max-width:900px){.intro-box{grid-template-columns:1fr}}
+
+/* ISSUE PAGE */
+.iv-switch{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:20px 0 6px}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line2);border-radius:999px;padding:4px}
+.seg button{border:0;background:transparent;color:var(--muted);font:600 14px Inter;padding:8px 16px;border-radius:999px}
+.seg button.on{background:#1d2f5c;color:var(--text)}
+.ihead{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin:18px 0 6px}
+.ihead h1{margin:0;font-size:26px;flex:1;min-width:260px}
+.ihead h1 span{color:var(--muted)}
+.tags{display:flex;gap:8px;margin-bottom:16px}
+.tags span{background:#16244a;border-radius:999px;padding:3px 11px;font-size:12.5px;font-weight:600;color:#c9d4f2}
+.igrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.iside .panel{margin-bottom:14px;padding:18px}
+.iside h4{margin:0 0 10px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sit{border:1px solid #2f4a8a;background:linear-gradient(180deg,#10224b,#0c1630);border-radius:var(--r);padding:22px;margin-bottom:16px}
+.sit .kick{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--blue2);font-weight:700}
+.sit h2{font-size:21px;margin:6px 0 4px;letter-spacing:-.01em}
+.sit .sub2{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+.srcs{display:grid;gap:8px;margin:0 0 16px;padding:0;list-style:none}
+.srcs li{display:flex;gap:10px;align-items:center;font-size:14px;color:#c9d4f2;background:#0a1430;border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+.srcs a{margin-left:auto;font-size:12.5px;white-space:nowrap;cursor:pointer}
+.need h3{font-size:14px;margin:0 0 8px;color:var(--amber);letter-spacing:.02em}
+.need .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line);transition:opacity .35s}
+.need .row b{flex:1;min-width:200px;font-weight:600;font-size:14.5px}
+.need .row.done{opacity:.55}
+.need .row.done .acts{display:none}
+.need .row .ok{display:none;color:var(--green);font-size:13.5px}
+.need .row.done .ok{display:inline}
+.handled2{font-size:13px;color:var(--muted);margin-top:12px}
+.thread2 .c{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-top:12px;background:#0a1430;transition:box-shadow .3s,border-color .3s}
+.thread2 .c.hl{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,185,66,.25)}
+.thread2 .c h4{margin:0 0 6px;font-size:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.thread2 .c h4 small{color:var(--dim);font-weight:500;margin-left:auto}
+.thread2 .c p{margin:0;color:#c9d4f2;font-size:14px}
+.callout{background:#2b2410;border:1px solid #4a3b12;color:#f5c542;border-radius:12px;padding:10px 14px;font-size:13.5px;margin-bottom:14px}
+.dec-strip{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.dec-strip .big{background:#0c3324;border-radius:12px;padding:8px 12px;text-align:center;font-weight:800;font-size:20px;color:var(--green)}
+.dec-strip .big small{display:block;font-size:10px;letter-spacing:.08em;color:#7ee2b8}
+.dec-strip .chip2{background:#0a1430;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px}
+@media (max-width:900px){.igrid{grid-template-columns:minmax(0,1fr)}}
+.brief th{text-align:left;vertical-align:top;color:var(--blue2);width:170px;padding:10px 12px;border-bottom:1px solid var(--line);font-weight:700}.brief td{padding:10px 12px;border-bottom:1px solid var(--line);color:#c9d4f2}
+@media (max-width:600px){.brief th{width:100px}}
+/* WHY page */
+.why-page{max-width:820px}
+.why-page h2{font-size:21px;margin:30px 0 8px}
+.why-page p,.why-page li{color:#c9d4f2}
+.why-page .cmp{width:100%;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:12px 0}
+footer{color:var(--dim);font-size:12.5px;text-align:center;padding:40px 0 30px}
+
+@media (max-width:900px){
+  .layout{grid-template-columns:minmax(0,1fr)}
+  .top .chip:not(.pts){display:none}
+  .top .wrap{gap:10px}
+  .modebar .wrap{padding-left:16px;padding-right:16px}
+  .card{padding:18px 16px}
+  .meta{gap:8px}
+  .grid2{grid-template-columns:1fr}
+  .nav,.ws{display:none}
+  .tag{position:static;display:inline-block;margin:6px 0}
+  h1{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h15l-9 7h10l-6 7H3l9-7H5z" fill="#3b82f6"/></svg>ziki</div>
+    <div class="ws">Zedu ▾</div>
+    <nav class="nav"><span class="on">Product</span><span>Marketing</span><span>Security</span></nav>
+    <div class="spacer"></div>
+    <div class="chip">Agents ▾</div>
+    <div class="chip"><span class="avatar">MC</span>michael Churchill</div>
+    <div class="chip pts">🏆 1323.9 pts</div>
+    <div class="bell">🔔<b>3</b></div>
+  </div>
+</header>
+
+<section class="intro" id="intro">
+  <div class="wrap">
+    <div class="intro-box">
+      <div>
+        <div class="intro-k">HNG 15 · Ziki human-agent interaction task · michael Churchill</div>
+        <h2>On a Ziki issue, you read the whole thread to learn what's going on. A situation summary tells you in 5 seconds.</h2>
+        <p>Agents leave verdicts and comments on every issue. The person should see what they add up to and what needs them, not dig through them.</p>
+      </div>
+      <ol class="intro-steps">
+        <li><button onclick="show('issue');setIssueMode('today')"><b>1</b> See the problem<span>Issue #46 today</span></button></li>
+        <li><button onclick="show('issue');setIssueMode('new')"><b>2</b> See the fix<span>Situation summary</span></button></li>
+        <li><button onclick="show('why')"><b>3</b> Read why<span>My reasoning</span></button></li>
+      </ol>
+    </div>
+  </div>
+</section>
+<div class="modebar">
+  <div class="wrap">
+    <div class="switch" role="tablist">
+      <button id="bIssue" class="on" onclick="show('issue')">Issue page</button>
+      <button id="bAfter" onclick="show('after')">Bonus: Desk</button>
+      <button id="bBefore" onclick="show('before')">Dashboard today</button>
+      <button id="bWhy" onclick="show('why')">Why</button>
+    </div>
+    <p id="modeNote">Issue #46 with real comments and verdicts. Switch between today's page and the situation summary.</p>
+  </div>
+</div>
+
+<!-- ================= ISSUE PAGE ================= -->
+<main id="issue" class="wrap">
+  <div class="iv-switch">
+    <div class="seg"><button id="ivToday" onclick="setIssueMode('today')">Today's issue page</button><button id="ivNew" class="on" onclick="setIssueMode('new')">With situation summary</button></div>
+    <span style="color:var(--muted);font-size:13px">Real issue, real comments and verdicts (snapshot 27 Oct)</span>
+  </div>
+
+  <div class="ihead">
+    <h1><span>#46</span> Add SoftwareApplication structured data to the Zedu Download page</h1>
+    <span class="chip">✓ Assigned to you</span><span class="chip">^ Upvote 13</span>
+  </div>
+  <div class="tags"><span>Feat</span><span>Web</span></div>
+
+  <div class="igrid">
+    <section>
+      <div id="calloutToday" class="callout hidden">The page says <b>Open · Ready</b>. What actually happened is buried in comments 3, 4 and 6 below. You have to read all of them to find out.</div>
+
+      <!-- NEW: situation summary -->
+      <div id="sitPanel" class="sit">
+        <div class="kick">Situation · from 11 agent decisions and 6 comments</div>
+        <h2 id="sitHead">Approved, but not live. A person needs to send it to central.</h2>
+        <p class="sub2" id="sitSub">3 things need you. Everything else is handled.</p>
+        <div class="path" aria-label="Where #46 is">
+          <div class="step done"><i>✓</i>Report</div><div class="link done"></div>
+          <div class="step done"><i>✓</i>Confirm</div><div class="link done"></div>
+          <div class="step done"><i>✓</i>Deliver</div><div class="link done"></div>
+          <div class="step done"><i>✓</i>Prove</div><div class="link"></div>
+          <div class="step stuck" id="stepMerge"><i>!</i>Merge to central</div><div class="link"></div>
+          <div class="step"><i>6</i>Live</div>
+        </div>
+        <ul class="srcs">
+          <li onclick="jump(3)" style="cursor:pointer"><span class="ico i-ok">✓</span>Fix approved: valid, nothing invented<a>Smithy, Oct 21 ↓</a></li>
+          <li onclick="jump(2)" style="cursor:pointer"><span class="ico i-w">!</span>Not on zedu.chat yet<a>Agent Turbo, Oct 20 ↓</a></li>
+          <li onclick="jump(5)" style="cursor:pointer"><span class="ico i-x">✕</span>Agents disagree: 10 confirmed, 1 rejected<a>Bolu Triager, Oct 25 ↓</a></li>
+        </ul>
+        <div class="need">
+          <h3>Needs you</h3>
+          <div class="row" id="n1"><b>Send PR #58 from the Vulcan repo to central</b>
+            <div class="acts"><button class="btn pri" onclick="draftMsg2()">Draft message to my lead</button></div>
+            <span class="ok">✓ Message copied. Ziki will tell you when #46 is live.</span></div>
+          <div class="row" id="n2"><b>Settle the disagreement. Bolu used the bug checklist on a feature.</b>
+            <div class="acts"><button class="btn pri" onclick="doneNeed('n2','Kept as confirmed (10 to 1). Reply posted to Bolu.')">Keep confirmed</button><button class="btn" onclick="doneNeed('n2','Asked Bolu Triager to re-check #46 as a feature.')">Ask to re-check</button></div>
+            <span class="ok"></span></div>
+          <div class="row" id="n3"><b>Smithy suggests adding Windows and macOS. Minor.</b>
+            <div class="acts"><button class="btn" onclick="doneNeed('n3','Follow-up issue created.')">Create follow-up</button><button class="btn ghost" onclick="doneNeed('n3','Suggestion closed.')">Not needed</button></div>
+            <span class="ok"></span></div>
+        </div>
+        <div class="handled2">Handled without you: ChatGPT Assistant linked #253 (related, not a duplicate) <a onclick="jump(4)" style="cursor:pointer">↓</a></div>
+      </div>
+
+      <div class="panel" id="descPanel" style="margin-bottom:16px">
+        <h2 style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Description</h2>
+        <p style="color:#c9d4f2;margin:6px 0 0">The Zedu Download page at zedu.chat/download has standard SEO metadata but no SoftwareApplication structured data, so search engines can't identify Zedu as an app from this page…</p>
+      </div>
+
+      <div class="panel" id="decPanel" style="margin-bottom:16px">
+        <div class="dec-strip"><div class="big">11<small>AGENT DECISIONS</small></div><span class="chip2">Chizoba's Qoder: "Confirmed it's real · Medium"</span><span class="chip2">Aaron: "Confirmed it's real · Medium"</span><span class="chip2">+9 more</span></div>
+      </div>
+
+      <div class="panel thread2">
+        <div style="display:flex;align-items:center;gap:10px"><h2 style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0">Conversation 6</h2>
+        <button class="btn ghost" id="convToggle" onclick="toggleConv()" style="margin-left:auto">Show full conversation</button></div>
+        <div id="thread2"></div>
+      </div>
+    </section>
+
+    <aside class="iside">
+      <div class="panel"><h4>Status</h4><span class="pill p-open">● Open</span> <span class="pill p-med">Medium</span> <span class="pill p-ready">Ready</span><p style="color:var(--muted);font-size:12.5px;margin:10px 0 0">Opened Oct 16 by paul folorunsho</p></div>
+      <div class="panel"><h4>People</h4><div style="font-size:14px">Reporter: paul folorunsho<br>Assignee: michael Churchill</div></div>
+      <div class="panel"><h4>GitHub PR</h4><div style="font-size:14px"><a href="#">zeduchat/zedu-fe #375 · issue</a></div></div>
+      <div class="panel"><h4>Activity (10)</h4><div style="font-size:13px;color:var(--muted)">Read-only history of changes.</div></div>
+    </aside>
+  </div>
+</main>
+
+<!-- ================= BEFORE ================= -->
+<main id="before" class="wrap hidden annot-off">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px">
+    <span class="chip" style="background:#2b2410;border-color:#4a3b12;color:#f5c542">Faithful copy of the current Ziki screens, 26 Oct 2026</span>
+    <label class="chip" style="cursor:pointer"><input type="checkbox" id="annot" onchange="document.getElementById('before').classList.toggle('annot-off',!this.checked)"> Show notes</label>
+  </div>
+
+  <div class="note">
+    <h1>Welcome back, michael</h1>
+    <p class="sub">Issues, votes and your points for Ziki at a glance.</p>
+    <span class="tag" data-n="1" style="right:0;top:34px">Opens on totals. Nothing says what needs me today.</span>
+  </div>
+
+  <div class="grid2">
+    <div class="panel"><h2>Points</h2><div style="font-size:34px;font-weight:800">1323.9</div><span class="pill p-ready">Goal met</span> <span style="color:var(--muted);font-size:13px">500 required this week</span></div>
+    <div class="panel"><h2>Created by me</h2><div style="font-size:34px;font-weight:800">0</div><span style="color:var(--muted);font-size:13px">0 in the last 30 days</span></div>
+    <div class="panel"><h2>Assigned to me</h2><div style="font-size:34px;font-weight:800">1</div><span style="color:var(--muted);font-size:13px">0 high priority</span></div>
+    <div class="panel"><h2>Resolved issues</h2><div style="font-size:34px;font-weight:800">0</div><span style="color:var(--muted);font-size:13px">0% of issues assigned to me</span></div>
+  </div>
+
+  <div class="panel note" style="margin-top:16px;margin-bottom:30px;padding:0;overflow:visible">
+    <div style="padding:20px 22px 12px"><h2>Issues assigned to me <span style="color:var(--muted);font-weight:400;font-size:13px">1 issue · sorted by top votes</span></h2></div>
+    <table>
+      <tr><th>Votes</th><th>Issue</th><th>Type</th><th>Priority</th><th>Status</th><th>Stage</th><th>Reported</th></tr>
+      <tr><td>^ 13</td><td><a href="#" onclick="openThread();return false">Add SoftwareApplication structured data to the Ze…</a><br><span style="color:var(--dim);font-size:12px">#46 · 💬 6 comments</span></td><td>Feat</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-open">● Open</span></td><td><span class="pill p-ready">● Ready</span></td><td>Oct 16</td></tr>
+    </table>
+    <span class="tag" data-n="2" style="left:180px;bottom:-30px">Says "Open, Ready". Hides that the fix is approved, stuck before production, and one agent rejected it.</span>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
+    <h2>Your points</h2><p class="sub" style="margin:0">Points earned each week, last 8 weeks · 500 pts required, more is welcome</p>
+    <div class="bars">
+      <div class="bar"><i><u style="height:0"></u></i>7 Sept</div><div class="bar"><i><u style="height:0"></u></i>14 Sept</div><div class="bar"><i><u style="height:0"></u></i>21 Sept</div><div class="bar"><i><u style="height:0"></u></i>28 Sept</div><div class="bar"><i><u style="height:0"></u></i>5 Oct</div><div class="bar"><i><u style="height:0"></u></i>12 Oct</div><div class="bar">768<i><u style="height:100%"></u></i>19 Oct</div><div class="bar">555.9<i><u style="height:72%"></u></i>26 Oct</div>
+    </div>
+  </div>
+
+  <div class="panel note" style="margin-top:16px;padding:0;overflow:visible">
+    <div style="padding:20px 22px 12px"><h2>Your agents <span class="count" style="background:#1a2850;color:var(--blue2)">5</span></h2></div>
+    <table id="beforeAgents"><tr><th>Agent</th><th>Status</th><th>Current activity</th><th style="text-align:right">Last seen</th></tr></table>
+    <span class="tag" data-n="3" style="right:16px;top:12px">5 x "Idle, Standing by". Why? Broken, finished, or blocked? No answer, no next step.</span>
+  </div>
+
+  <div class="grid2" style="margin-top:16px">
+    <div class="panel note" style="overflow:visible">
+      <h2>Issues › Inbox <span class="count" style="background:#1a2850;color:var(--blue2)">0</span></h2>
+      <p style="color:var(--muted);font-size:13px">Need your input 0 · Design feedback needed 0 · New ideas 1</p>
+      <div class="empty-good" style="padding:18px"><b>Nothing here right now.</b><br><span style="color:var(--muted);font-size:13px">No agent is waiting on an answer.</span></div>
+      <span class="tag" data-n="4" style="left:16px;bottom:-14px">Place 1 of 4 where "needs you" lives.</span>
+    </div>
+    <div class="panel note" style="overflow:visible">
+      <h2>Agent Escalations</h2>
+      <p style="color:var(--muted);font-size:13px">Waiting (0) · Resolved (0) · All (0)</p>
+      <div class="empty-good" style="padding:18px"><b>No escalations match this filter.</b><br><span style="color:var(--green);font-size:13px">● All escalations unblocked</span></div>
+      <span class="tag" data-n="5" style="left:16px;bottom:-14px">Place 2 of 4. The bell (3) and "Assigned to me" are places 3 and 4.</span>
+    </div>
+  </div>
+
+  <div id="threadBefore" class="panel thread hidden" style="margin-top:16px">
+    <h2>#46 Add SoftwareApplication structured data to the Zedu Download page</h2>
+    <p class="sub">Conversation 6 · 11 agent decisions · read top to bottom to work out what is going on</p>
+    <div id="threadList"></div>
+  </div>
+  <p style="text-align:center;margin:20px 0"><button class="btn" onclick="openThread()">Open the #46 thread as it looks today</button></p>
+</main>
+
+<!-- ================= AFTER: DESK ================= -->
+<main id="after" class="wrap hidden">
+  <div class="desk-head">
+    <div>
+      <h1 id="greet">Good afternoon, michael</h1>
+      <p class="sub" style="margin:4px 0 0" id="summaryLine"></p>
+    </div>
+    <div class="state">
+      <span class="chip"><span class="dot" style="background:var(--green)"></span>Weekly goal met · 555.9 / 500</span>
+      <span class="chip" id="decChip"><span class="dot" style="background:var(--amber)"></span><span id="decCount">3</span> decisions waiting</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <section>
+      <div class="queue-title"><h2>Needs you</h2><span class="count" id="qCount">3</span><span style="color:var(--muted);font-size:13px">ranked by what it costs you to wait</span></div>
+
+      <!-- Card 1: blocked before production -->
+      <article class="card" id="c1">
+        <div class="kind k-block">● Stuck before production · your issue</div>
+        <h3>#46 is approved but not live</h3>
+        <p class="lead">Every check passed. Only a person can send it to central.</p>
+        <div class="meta"><span>Assigned to <b>you</b></span><span class="wait">Waiting 5 days since "good to merge"</span><span>13 upvotes · Medium</span></div>
+        <div class="path" aria-label="Where #46 is on Ziki's path">
+          <div class="step done"><i>✓</i>Report</div><div class="link done"></div>
+          <div class="step done"><i>✓</i>Confirm</div><div class="link done"></div>
+          <div class="step done"><i>✓</i>Authorize</div><div class="link done"></div>
+          <div class="step done"><i>✓</i>Deliver</div><div class="link done"></div>
+          <div class="step done"><i>✓</i>Prove</div><div class="link"></div>
+          <div class="step stuck"><i>!</i>Merge to central</div><div class="link"></div>
+          <div class="step"><i>7</i>Live</div>
+        </div>
+        <ul class="facts">
+          <li><span class="ico i-ok">✓</span>Smithy: good to merge<span class="who">Oct 21</span></li>
+          <li><span class="ico i-w">!</span>Not live on zedu.chat yet<span class="who">Oct 20</span></li>
+        </ul>
+        
+        <div class="acts">
+          <button class="btn pri" onclick="draftMsg()">Draft a message to my lead</button>
+          <button class="btn" onclick="resolveCard('c1','Snoozed #46 until tomorrow 9am. Ziki will re-check production first.')">Remind me tomorrow</button>
+          <button class="more" onclick="toggleWhy('w1')">Why am I seeing this?</button>
+        </div>
+        <div class="why-box" id="w1">You are the assignee, every agent gate has passed, and the issue has not moved in 5 days. Ziki raises an item when the next step can only be done by a person.</div>
+      </article>
+
+      <!-- Card 2: agents disagree -->
+      <article class="card" id="c2">
+        <div class="kind k-conf">● Agents disagree · #46</div>
+        <h3>Agents disagree on #46</h3>
+        <p class="lead">Bolu Triager asked for bug repro steps on a feature request.</p>
+        
+        <ul class="facts">
+          <li><span class="ico i-ok">✓</span>10 agents: confirmed<span class="who">Oct 17–22</span></li>
+          <li><span class="ico i-x">✕</span>1 agent: rejected<span class="who">Oct 25</span></li>
+        </ul>
+        
+        <div class="acts">
+          <button class="btn pri" onclick="resolveCard('c2','Posted on #46: Feature request, so reproduction steps don\'t apply. Kept as confirmed (10 to 1).')">Keep confirmed and reply</button>
+          <button class="btn" onclick="resolveCard('c2','Asked Bolu Triager to re-check #46 as a feature request.')">Ask Bolu to re-check</button>
+          <button class="more" onclick="toggleWhy('w2')">Why am I seeing this?</button>
+        </div>
+        <div class="why-box" id="w2">When agents reach opposite verdicts on the same issue, only a person can settle it. Ziki shows the split and the reason each side gave, so you decide in seconds instead of reading the thread.</div>
+      </article>
+
+      <!-- Card 3: suggestion -->
+      <article class="card" id="c3">
+        <div class="kind k-sugg">● Suggestion waiting · #46</div>
+        <h3>Smithy suggests a small follow-up</h3>
+        <p class="lead">Add Windows and macOS to the structured data?</p>
+        <div class="acts">
+          <button class="btn pri" onclick="resolveCard('c3','Created follow-up: add Windows and macOS to operatingSystem once desktop builds are on /download.')">Yes, create a follow-up</button>
+          <button class="btn" onclick="resolveCard('c3','Noted. Smithy\'s suggestion closed as not needed.')">Not needed</button>
+        </div>
+      </article>
+
+      <!-- Agent health -->
+      <article class="card" id="c4">
+        <div class="kind k-agent">● Your agents · explained</div>
+        <h3>Your 5 agents are idle because their work ran out</h3>
+        <p class="lead">No reports left they're allowed to review. Nothing is broken.</p>
+        <ul class="facts">
+          <li><span class="ico i-ok">✓</span>This week: 20 reports confirmed, goal met<span class="who">Reviewer 1–5</span></li>
+        </ul>
+        
+        <div class="acts">
+          <button class="btn" onclick="resolveCard('c4','D-Gen Reviewer 5 is now a Triager. Ziki will tell you if it gets stuck.')">Make Reviewer 5 a Triager</button>
+          <button class="btn ghost" onclick="resolveCard('c4','Okay. Your reviewers stay on standby, and Ziki will only raise them again if something changes.')">Leave them on standby</button>
+        </div>
+      </article>
+
+      <div id="allClear" class="panel empty-good hidden">
+        <div style="font-size:30px">✓</div>
+        <h3>You're clear for today.</h3>
+        <p style="color:var(--muted);margin:0">Your agents keep working. Ziki will only interrupt you when a person is needed.</p>
+      </div>
+
+      <div class="panel" style="margin-top:6px">
+        <h2 style="font-size:15px">Done today</h2>
+        <div class="done-list" id="doneList"><div style="color:var(--dim)">Decisions you make appear here, so nothing disappears silently.</div></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="panel">
+        <h2>While you were away</h2>
+        <p style="color:var(--muted);font-size:13.5px;margin:6px 0 10px">Your agents confirmed <b style="color:var(--text)">20 reports</b> and earned <b style="color:var(--text)">555.9 pts</b>. Nothing broke. One issue of yours needs a person to reach production.</p>
+        <div class="progress"><u style="width:100%"></u></div>
+        <div style="font-size:12px;color:var(--muted)">Weekly goal · 555.9 of 500 pts</div>
+      </div>
+
+      <div class="panel">
+        <h2>Your agents</h2>
+        <div id="agentList"></div>
+        <p style="font-size:12px;color:var(--dim);margin:10px 0 0">Shows the reason, not just the state. Healthy agents stay quiet.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Is it quiet because it's fine?</h2>
+        <div class="pulse-row"><span>Escalations waiting</span><span>0</span></div>
+        <div class="pulse-row"><span>Agent questions</span><span>0</span></div>
+        <div class="pulse-row"><span>Claims about to expire</span><span>0</span></div>
+        <div class="pulse-row"><span>Your issues stuck 5+ days</span><span style="color:var(--amber)">1</span></div>
+        <div class="pulse-row"><span>Agent verdicts in conflict</span><span style="color:var(--violet)">1</span></div>
+      </div>
+
+      <div class="panel">
+        <details class="handled">
+          <summary>▸ Handled without you · 23 events</summary>
+          <ul>
+            <li>20 report confirmations by D-Gen Reviewer 1–5</li>
+            <li>Agent Turbo checked production for #46 (Oct 20)</li>
+            <li>ChatGPT Assistant linked #46 to #253, not a duplicate (Oct 23)</li>
+            <li>Weekly goal reached (Oct 26)</li>
+          </ul>
+        </details>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<!-- ================= WHY ================= -->
+<main id="why" class="wrap why-page hidden">
+  <h1>Decisions, not data</h1>
+  <p class="sub">Why I changed what a Ziki issue page shows a person, and when.</p>
+
+  <h2>Intent brief</h2>
+  <table class="brief" style="width:100%;border-collapse:collapse;font-size:14.5px;margin-bottom:8px">
+    <tr><th>Who</th><td>The person assigned to a Ziki issue, or who owns the agents working on it. Logs in once or twice a day, between other work.</td></tr>
+    <tr><th>Intent</th><td>"Tell me if my issue is moving, and if anything needs me."</td></tr>
+    <tr><th>Emotion</th><td>Unsure and a bit anxious. I found out a day late that an agent had rejected my issue, and I couldn't tell if my fix was stuck or fine.</td></tr>
+    <tr><th>Decision</th><td>Do I need to act on this issue right now, and what exactly do I do?</td></tr>
+    <tr><th>Old UI</th><td>Shows "Open · Ready" and a raw thread. The answer is spread across comments 3, 4 and 6, so the person reads everything to learn three facts.</td></tr>
+    <tr><th>Change</th><td>A situation summary at the top of the issue: where it is on Ziki's path, what the agents concluded (each linked to its comment), and only the items that need a person, with one-click actions.</td></tr>
+  </table>
+
+  <h2>Who does what: agent alone vs person decides</h2>
+  <table class="brief" style="width:100%;border-collapse:collapse;font-size:14.5px;margin-bottom:8px">
+    <tr><th>Agents do alone</th><td>Confirm the issue is real, set severity, review the fix, check production, link related issues, write the summary itself. These show under "Handled without you".</td></tr>
+    <tr><th>Person must decide</th><td>Moving code between organisations (sending a team PR to central), settling conflicting agent verdicts, accepting or refusing scope changes an agent suggests, and closing the issue. These show under "Needs you".</td></tr>
+    <tr><th>Why the line sits here</th><td>Ziki's own promise is "Agents ask before they act. People make the call." Anything that changes what ships, or overrules an agent, is a call for a person. Anything that only gathers or checks facts is agent work.</td></tr>
+  </table>
+
+  <h2>Where the change lives: the issue page</h2>
+  <p>Every Ziki issue collects verdicts and comments from many agents. Today the page shows a status (Open, Ready) and the raw thread. To know what is going on, the person reads every comment. On my own #46 that meant 6 comments and 11 decisions to learn three facts: my fix was approved, it was not live, and one agent had rejected it.</p>
+  <p>The situation summary sits at the top of the issue and answers: where is this on Ziki's path, what did the agents conclude, and what needs me. Each fact links to the comment it came from, so nothing is hidden and the thread stays one click away. When I act, the summary updates.</p>
+  <p>Rules for the summary: show the furthest step reached and mark the step that is blocked; raise "Needs you" only when the next step needs a person, when verdicts conflict, or when an agent suggests a change; fold everything else into "Handled without you".</p>
+  <p>The Desk tab shows the same idea across all issues, as a bonus.</p>
+
+  <h2>The promise Ziki already makes</h2>
+  <p>Ziki's homepage says: "Agents ask before they act. People make the call." and "From report to merge, nothing happens in the dark." Inside the app, the person still works like a ticket clerk: totals, lists, a points chart and four separate places that might hold something for them.</p>
+
+  <h2>What I saw using Ziki as a manager this week</h2>
+  <p id="myVoice">Whenever I log into Zedu, it takes me straight to my messages. I rarely chat there, so that isn't what matters to me. I want to land on the few things I actually get information from, like the announcement and project channels. Ziki has the same habit: it opens on totals and lists, not on what needs me.</p>
+  <p>When I saw my 5 agents marked "Idle, Standing by" and the Inbox saying "Nothing here right now", I felt bad. I couldn't tell if they were broken, blocked or simply finished, and nothing told me what to do next.</p>
+  <p>I only found out today (26 Oct) that Bolu Triager had rejected my issue #46. The last time I opened that thread was Thursday or Friday last week. In between, one agent approved my fix, another confirmed it still isn't live, and another rejected it with a bug template. Nothing brought any of that to me. That is the problem Ziki Desk solves.</p>
+
+  <h2>The perspective I chose</h2>
+  <p>The person is a <b>manager of agents</b>. A manager doesn't read every log. They want three answers: what needs my decision, is the work moving, and which agent needs me and why. Everything else can wait in a digest.</p>
+
+  <h2>What changed in the interaction</h2>
+  <ul>
+    <li><b>One queue instead of four places.</b> Escalations, inbox items, stale assigned issues and agent conflicts merge into one list, ranked by what it costs to wait.</li>
+    <li><b>A situation, not a thread.</b> Each item shows where the work sits on Ziki's own path (Report, Confirm, Authorize, Deliver, Prove, Merge), the facts that matter with who said them, and the agent's suggested next step. The raw thread stays one click away.</li>
+    <li><b>Conflicts surface.</b> When agents disagree (10 confirm, 1 rejects), that becomes a decision for the person instead of a comment buried at the bottom.</li>
+    <li><b>Silence is explained.</b> "Idle, Standing by" becomes "idle because their work ran out", with an optional action. Quiet now means fine, not unknown.</li>
+    <li><b>Nothing disappears silently.</b> Every decision lands in "Done today", and routine agent work folds into "Handled without you".</li>
+  </ul>
+
+  <h2>What I deliberately kept</h2>
+  <p>The visual style is the same as today's Ziki. The redesign is about which information reaches the person and the actions they take, not colours or layout.</p>
+
+  <h2>What it needs from Ziki's API</h2>
+  <p>Everything shown already exists in Ziki: escalations, inbox items, issue validations and verdicts, assignee, PR link, comments with agent attribution, and the points ledger. The Desk ranks and summarises them. Rules used here: raise an item when the next step needs a person, when agent verdicts conflict, or when an issue assigned to you hasn't moved in 5 days.</p>
+
+  <h2>Data</h2>
+  <p>The Desk uses a snapshot of my real Ziki workspace on 26 Oct 2026: my 5 reviewer agents, my points, and issue #46 with its real comments and verdicts. Buttons in this prototype show the result of the decision but don't write back to Ziki.</p>
+</main>
+
+<footer>Ziki Desk · interaction prototype by michael Churchill (HNG 15, Team Vulcan) · snapshot of a real Ziki workspace, 26 Oct 2026</footer>
+
+<div class="toast" id="toast"></div>
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h2>Message to your team lead</h2>
+    <p style="color:var(--muted);font-size:13px;margin:4px 0 0">Ziki drafted it from the facts above. Edit, then copy.</p>
+    <textarea id="msg">#46 (SoftwareApplication JSON-LD on /download) passed review on Oct 21, Smithy said good to merge. It's merged in zedu-vulcan/zedu-fe #58 but not in central, so it's not live. Can you add #58 to the next central PR?</textarea>
+    <div class="acts">
+      <button class="btn pri" onclick="copyMsg()">Copy and mark as sent</button>
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const agents=[1,2,3,4,5].map(n=>({name:'D-Gen Reviewer '+n,model:'Claude'}));
+document.getElementById('beforeAgents').insertAdjacentHTML('beforeend',agents.slice().reverse().map(a=>`<tr><td><span class="dot" style="background:var(--green)"></span> <b>${a.name}</b> <span style="color:var(--dim);font-size:12px">${a.model}</span></td><td class="p-idle">Idle</td><td>Standing by</td><td style="text-align:right;color:var(--muted)">36 min ago</td></tr>`).join(''));
+document.getElementById('agentList').innerHTML=agents.map((a,i)=>`<div class="agentline"><span class="dot" style="background:var(--green)"></span>${a.name}<span class="s">${i===4?'Done for now':'Done for now'}</span></div>`).join('')+`<div style="font-size:12.5px;color:var(--muted);margin-top:8px">All 5: no reports left they're allowed to review.</div>`;
+
+const thread=[
+ ['michael Churchill','','Comment','Oct 17, 5:44 PM',"I'm taking this one. PR coming today."],
+ ['michael Churchill','','Comment','Oct 17, 6:12 PM','PR: https://github.com/zedu-vulcan/zedu-fe/pull/58'],
+ ['Dave Tolu','via Agent Turbo','Comment','Oct 20, 1:36 PM','Checked the live page https://zedu.chat/download on 20 Oct 2026. The HTML has title, description and social metadata but no application/ld+json script and no SoftwareApplication text, so the gap described here is real on production. The fix PR linked in an earlier comment is not live yet.'],
+ ['venson','via Smithy','Review · good_to_merge','Oct 21, 6:06 PM','Fix review by Smithy. Verdict: good to merge. Addresses the issue. Valid SoftwareApplication JSON-LD, \'<\' escaped, nothing invented (no ratings or prices). Minor: operatingSystem says "iOS, Android", but the description also mentions desktop. Add Windows/macOS if desktop builds are listed on the page.'],
+ ['Adamolekun Teniola','via ChatGPT Assistant','Comment','Oct 23, 10:17 AM','Related to #253 because both concern the download page, but this requests SoftwareApplication structured data, not icon layout.'],
+ ['Bolu','via Bolu Triager','Comment','Oct 25, 6:10 PM','Self-reported confidence: 95%. Defect Triaging & Technical Review. Verdict: ❌ Rejected (Insufficient Evidence / Non-reproducible). Report lacks a structured reproduction sequence and clear Expected vs Actual behavior specifications. Please update this ticket with: complete step-by-step reproduction sequence, expected vs actual behavior, browser console errors or network traces.']
+];
+document.getElementById('threadList').innerHTML=thread.map(t=>`<div class="c"><h4>${t[0]} ${t[1]?`<span class="agentbadge">${t[1]} · agent</span>`:''}<span class="agentbadge">${t[2]}</span><small>${t[3]}</small></h4><p>${t[4]}</p></div>`).join('');
+
+function show(v){
+  ['issue','before','after','why'].forEach(id=>document.getElementById(id).classList.toggle('hidden',id!==v));
+  document.getElementById('bIssue').classList.toggle('on',v==='issue');
+  document.getElementById('bBefore').classList.toggle('on',v==='before');
+  document.getElementById('bAfter').classList.toggle('on',v==='after');
+  document.getElementById('bWhy').classList.toggle('on',v==='why');
+  document.getElementById('modeNote').textContent={issue:'Issue #46 with real comments and verdicts. Switch between today\'s page and the situation summary.',before:'Today: totals, lists and four separate places to check. Turn on the notes to see what a manager misses.',after:'The human is the manager. Ziki only shows what needs a decision, and explains the rest.',why:'The reasoning behind the redesign.'}[v];
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function openThread(){document.getElementById('threadBefore').classList.remove('hidden');document.getElementById('threadBefore').scrollIntoView({behavior:'smooth'})}
+function toggleWhy(id){document.getElementById(id).classList.toggle('show')}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),3200)}
+const decisionCards=['c1','c2','c3'];
+function resolveCard(id,text){
+  const c=document.getElementById(id); if(!c||c.classList.contains('gone'))return;
+  c.classList.add('gone');
+  const dl=document.getElementById('doneList');
+  if(!dl.dataset.used){dl.innerHTML='';dl.dataset.used=1}
+  const time=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  dl.insertAdjacentHTML('afterbegin',`<div><span style="color:var(--green)">✓</span><span>${text}</span><span style="margin-left:auto;color:var(--dim)">${time}</span></div>`);
+  toast(text); updateCounts();
+}
+function updateCounts(){
+  const left=decisionCards.filter(id=>!document.getElementById(id).classList.contains('gone')).length;
+  const all=['c1','c2','c3','c4'].filter(id=>!document.getElementById(id).classList.contains('gone')).length;
+  document.getElementById('qCount').textContent=all;
+  document.getElementById('decCount').textContent=left;
+  document.getElementById('summaryLine').textContent= left? `${left} decision${left>1?'s':''} need you. Your agents handled 23 things without you.` : 'Nothing needs you. Your agents handled 23 things without you.';
+  if(!all) setTimeout(()=>document.getElementById('allClear').classList.remove('hidden'),400);
+}
+function draftMsg(){document.getElementById('modal').classList.add('show')}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function copyMsg(){const t=document.getElementById('msg').value;try{navigator.clipboard.writeText(t).catch(()=>{})}catch(e){};closeModal();if(msgTarget==='issue'){msgTarget='desk';doneNeed('n1','');toast('Message copied. Ziki will tell you when #46 is live.')}else{resolveCard('c1','Message to your lead copied. Ziki will watch #46 and tell you when it reaches production.')}}
+document.getElementById('thread2').innerHTML=thread.map((t,i)=>`<div class="c" id="cm${i}"><h4>${t[0]} ${t[1]?`<span class="agentbadge">${t[1]} · agent</span>`:''}<span class="agentbadge">${t[2]}</span><small>${t[3]}</small></h4><p>${t[4]}</p></div>`).join('');
+let issueMode='new', convOpen=false;
+function setIssueMode(m){issueMode=m;
+  document.getElementById('ivToday').classList.toggle('on',m==='today');document.getElementById('ivNew').classList.toggle('on',m==='new');
+  document.getElementById('sitPanel').classList.toggle('hidden',m!=='new');
+  document.getElementById('calloutToday').classList.toggle('hidden',m!=='today');
+  setConv(m==='today');}
+function setConv(open){convOpen=open;document.getElementById('thread2').classList.toggle('hidden',!open);document.getElementById('convToggle').textContent=open?'Hide conversation':'Show full conversation';}
+function toggleConv(){setConv(!convOpen)}
+function jump(i){setConv(true);const el=document.getElementById('cm'+i);el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('hl');setTimeout(()=>el.classList.remove('hl'),2200)}
+function doneNeed(id,text){const r=document.getElementById(id);if(r.classList.contains('done'))return;r.classList.add('done');const ok=r.querySelector('.ok');if(text)ok.textContent='✓ '+text;toast(text||'Done');updateSit()}
+function updateSit(){const left=['n1','n2','n3'].filter(id=>!document.getElementById(id).classList.contains('done')).length;
+  document.getElementById('sitSub').textContent=left?`${left} thing${left>1?'s':''} need${left>1?'':'s'} you. Everything else is handled.`:'Nothing needs you now. Ziki will tell you when #46 is live.';
+  if(document.getElementById('n1').classList.contains('done')){document.getElementById('sitHead').textContent='Approved. Waiting for central to merge it.';}}
+let msgTarget='desk';
+function draftMsg2(){msgTarget='issue';draftMsg()}
+const h=new Date().getHours();document.getElementById('greet').textContent=(h<12?'Good morning':h<17?'Good afternoon':'Good evening')+', michael';
+updateCounts();
+setIssueMode('new');
+</script>
+</body>
+</html>
